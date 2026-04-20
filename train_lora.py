@@ -6,7 +6,7 @@ from transformers import TrainingArguments
 import os
 
 # 1. Configuration
-max_seq_length = 2048
+max_seq_length = 1024
 dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+
 load_in_4bit = True # Use 4bit quantization to reduce memory usage.
 
@@ -66,7 +66,7 @@ trainer = SFTTrainer(
     dataset_num_proc = 2,
     packing = False, # Can make training 5x faster for short sequences.
     args = TrainingArguments(
-        per_device_train_batch_size = 2,
+        per_device_train_batch_size = 1,
         gradient_accumulation_steps = 4,
         warmup_steps = 5,
         max_steps = 60, # Increase this for actual full training (e.g. num_train_epochs = 3)
