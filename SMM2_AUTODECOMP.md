@@ -17,18 +17,19 @@ If achieving an `OK` byte match requires you to spam `*(volatile uint32_t*)` cas
    ```bash
    ninja -C build && tools/check sub_XXXXXXX
    ```
-5. **Evaluation:**
+5. **Evaluation & Escalation:**
    - If it says `OK`: You won! Commit the result to the repository with a descriptive commit message (`git commit -am "decomp: match sub_XXXXXXX"`) and move to the next target.
    - If it outputs a mismatch diff: Analyze the AArch64 diff provided by Viking.
    - If the mismatch score goes **down** from your previous attempt without compromising code readability: Keep the changes.
-   - If the mismatch score gets stuck due to instruction scheduling (e.g., swapping of independent register loads) or register allocation (e.g., `x8` vs `x9`): **STOP.** 
-     - Do NOT use volatile hacks.
-     - Do NOT write inline assembly (unless specifically using `__asm__ volatile ("" ::: "memory");` as a clean compiler barrier).
-     - Leave the function marked as `W` (NON_MATCHING) in the CSV. Add a C++ comment explaining the compiler diff, commit the clean logic, and move on to the next function.
-   - If a pattern of mismatch is recurring due to a specific compiler behavior (like NEON merging), suggest a compiler flag or macro patch to the human operator rather than ruining the source file.
+   - **The "Step Back" Rule (Fuzz Testing):** If the mismatch score gets stuck due to instruction scheduling (e.g., swapping of independent register loads) or register allocation differences (`x8` vs `x9`), do not endlessly push through the mountain.
+     - **Stop brute-forcing.** 
+     - Do NOT use volatile hacks or inline assembly.
+     - Instead, write a property-based Unicorn fuzz test in `tests/bridge/test_sub_XXXXXXX.py` comparing your compiled object against the original binary.
+     - If the memory states and register outputs are functionally identical across 10,000 iterations, the function is perfectly accurate. Mark it as `E` (Equivalent) in the CSV, commit it, and move on.
+   - If a pattern of mismatch is recurring due to a specific compiler behavior (like NEON merging), step back, pause the loop, and suggest a global compiler patch or macro to the human orchestrator.
 
 ## The Rules
-- **Never guess blindly:** Always base your next C++ edit on the explicit output of the `tools/check` diff.
+- **Never guess blindly:** Always base your next C++ edit on the explicit output of the `tools/check` diff or the Unicorn fuzzing results.
 - **Understand the Compiler:** We use a patched Clang 8.0.0 (`-mllvm -enable-post-misched=false -mllvm -disable-store-merging -fno-slp-vectorize`). It is heavily optimized, but it inlines aggressively. If a function is massive, look for inline helper functions in the SMM1 decompilation references (`ref/smr/`).
 - **Structs over Primitives:** Nintendo extensively uses bitfields and structs. If an instruction uses `ldr w8, [x19, #0x492]`, you are likely dealing with a struct field, not raw pointer math. Search the `src/` headers for matching offsets.
-- **Ask for Help:** If you encounter a fundamental failure in the build system, `tools/check` crashes, or you find a systemic compiler issue, pause the loop and ask the human operator for help.
+- **Ask for Help:** If you encounter a fundamental failure in the build system or you get totally stuck, do not spin in an endless loop apologizing. Pause the loop immediately and ask the human operator for help.
