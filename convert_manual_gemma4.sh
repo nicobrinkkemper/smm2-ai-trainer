@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-MODEL_DIR="/workspace/lora_model_gemma4"
-F16_GGUF="/workspace/smm2-gemma-4-textonly-f16.gguf"
-Q4_GGUF="/workspace/smm2-gemma-4-textonly-Q4_K_M.gguf"
+MODEL_DIR="/workspace/work/smm2-ai-trainer/lora_model_gemma4"
+F16_GGUF="/workspace/work/smm2-ai-trainer/smm2-gemma-4-textonly-f16.gguf"
+Q4_GGUF="/workspace/work/smm2-ai-trainer/smm2-gemma-4-textonly-Q4_K_M.gguf"
 
 if [ ! -d "$MODEL_DIR" ]; then
     echo "ERROR: Base model directory $MODEL_DIR not found!"
@@ -11,7 +11,7 @@ if [ ! -d "$MODEL_DIR" ]; then
 fi
 
 echo "Setting up llama.cpp..."
-cd /workspace
+cd /workspace/work/smm2-ai-trainer
 if [ ! -d "llama.cpp" ]; then
   git clone https://github.com/ggerganov/llama.cpp.git
 fi
