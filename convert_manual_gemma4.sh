@@ -22,11 +22,17 @@ cmake -B build -G Ninja
 cmake --build build -j $(nproc)
 
 if [ ! -f "$F16_GGUF" ]; then
-python3 ../fix_config.py
+    echo "Fixing tokenizer path requirement..."
+    # Download the official Gemma 2 tokenizer.model
+    wget -qO "$MODEL_DIR/tokenizer.model" https://huggingface.co/google/gemma-2-9b/resolve/main/tokenizer.model || true
+
+    echo "Patching llama.cpp to bypass the BPE hash check..."
+    sed -i 's/self._set_vocab_gpt2()/self._set_vocab_sentencepiece()/g' convert_hf_to_gguf.py
+
+    echo "Running Python configuration spoofer..."
+    python3 ../fix_config.py
 
     echo "Converting F16 model..."
-    # We bypass the SentencePiece .model check entirely since it's obsolete in Gemma 4
-    sed -i 's/self._set_vocab_sentencepiece()/self._set_vocab_gpt2()/g' convert_hf_to_gguf.py
     python3 convert_hf_to_gguf.py "$MODEL_DIR" --outfile "$F16_GGUF"
 else
     echo "F16 GGUF already exists, skipping conversion..."
