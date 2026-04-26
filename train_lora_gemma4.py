@@ -9,7 +9,7 @@ dtype = None
 load_in_4bit = True
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/gemma-4-it-bnb-4bit",
+    model_name = "unsloth/gemma-4-E4B-it-unsloth-bnb-4bit",
     max_seq_length = max_seq_length,
     dtype = dtype,
     load_in_4bit = load_in_4bit,
