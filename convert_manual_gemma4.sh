@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-MODEL_DIR="/workspace/work/smm2-ai-trainer/lora_model_gemma4"
+MODEL_DIR="/workspace/work/smm2-ai-trainer/merged_gemma4_16bit"
 F16_GGUF="/workspace/work/smm2-ai-trainer/smm2-gemma-4-textonly-f16.gguf"
 Q4_GGUF="/workspace/work/smm2-ai-trainer/smm2-gemma-4-textonly-Q4_K_M.gguf"
 
