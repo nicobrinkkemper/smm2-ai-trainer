@@ -34,6 +34,7 @@ if [ ! -f "$F16_GGUF" ]; then
     python3 ../fix_config.py
 
     echo "Converting F16 model..."
+    rm -f "$F16_GGUF"
     python3 convert_hf_to_gguf.py "$MODEL_DIR" --outfile "$F16_GGUF"
 else
     echo "F16 GGUF already exists, skipping conversion..."
