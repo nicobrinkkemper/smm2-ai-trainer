@@ -33,6 +33,8 @@ if [ ! -f "$F16_GGUF" ]; then
     echo "Running Python configuration spoofer..."
     python3 ../fix_config.py
 
+python3 ../delete_rogue_tensor.py
+
     echo "Converting F16 model..."
     rm -f "$F16_GGUF" "$Q4_GGUF"
     python3 convert_hf_to_gguf.py "$MODEL_DIR" --outfile "$F16_GGUF"
