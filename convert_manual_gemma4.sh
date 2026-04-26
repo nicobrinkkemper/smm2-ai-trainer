@@ -23,8 +23,8 @@ cmake --build build -j $(nproc)
 
 if [ ! -f "$F16_GGUF" ]; then
     echo "Fixing tokenizer path requirement..."
-    # Download the official Gemma 2 tokenizer.model
-    wget -qO "$MODEL_DIR/tokenizer.model" https://huggingface.co/google/gemma-2-9b/resolve/main/tokenizer.model || true
+    # Download using python's built-in urllib because wget doesn't exist on this docker image!
+    python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/google/gemma-2-9b/resolve/main/tokenizer.model', '$MODEL_DIR/tokenizer.model')"
 
     echo "Patching llama.cpp to bypass the BPE hash check..."
     sed -i 's/self._set_vocab_gpt2()/self._set_vocab_sentencepiece()/g' convert_hf_to_gguf.py
