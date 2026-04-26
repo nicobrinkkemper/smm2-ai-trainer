@@ -3,13 +3,16 @@ import torch
 from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
+import os
+
+os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'
 
 max_seq_length = 2048
 dtype = None 
 load_in_4bit = True
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/gemma-4-E4B-it-unsloth-bnb-4bit",
+    model_name = "principled-intelligence/gemma-4-E4B-it-text-only",
     max_seq_length = max_seq_length,
     dtype = dtype,
     load_in_4bit = load_in_4bit,
@@ -32,7 +35,7 @@ model = FastLanguageModel.get_peft_model(
 print("Loading dataset...")
 dataset = load_dataset("json", data_files="dataset_v3_chatml.jsonl", split="train")
 
-print(f"Starting Gemma 4 LoRA fine-tuning on {len(dataset)} examples...")
+print(f"Starting Gemma 4 (Text-Only) LoRA fine-tuning on {len(dataset)} examples...")
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
