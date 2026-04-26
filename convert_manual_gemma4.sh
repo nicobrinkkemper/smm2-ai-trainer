@@ -16,10 +16,12 @@ if [ ! -d "llama.cpp" ]; then
   git clone https://github.com/ggerganov/llama.cpp.git
 fi
 cd llama.cpp
-git pull origin master
+# Skip git pull if we already compiled it to avoid unnecessary rebuilds
+# git pull origin master
 
 echo "Building llama.cpp..."
-rm -rf build
+# DO NOT wipe the build directory if it exists!
+# rm -rf build
 cmake -B build -G Ninja
 cmake --build build -j $(nproc)
 
