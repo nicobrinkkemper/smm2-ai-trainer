@@ -10,18 +10,22 @@ if [ ! -d "$MODEL_DIR" ]; then
     exit 1
 fi
 
+echo "Downloading missing tokenizer.model using Python..."
+python3 -c "
+import urllib.request
+url = 'https://huggingface.co/google/gemma-2-9b/resolve/main/tokenizer.model'
+output = '/workspace/work/smm2-ai-trainer/merged_gemma4_16bit/tokenizer.model'
+urllib.request.urlretrieve(url, output)
+"
+
 echo "Setting up llama.cpp..."
 cd /workspace/work/smm2-ai-trainer
 if [ ! -d "llama.cpp" ]; then
   git clone https://github.com/ggerganov/llama.cpp.git
 fi
 cd llama.cpp
-# Skip git pull if we already compiled it to avoid unnecessary rebuilds
-# git pull origin master
 
 echo "Building llama.cpp..."
-# DO NOT wipe the build directory if it exists!
-# rm -rf build
 cmake -B build -G Ninja
 cmake --build build -j $(nproc)
 
