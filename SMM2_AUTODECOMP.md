@@ -50,3 +50,17 @@ When training the massive 27B model on RunPod, follow this exact workflow to byp
      `export HF_HOME=/workspace/work/hf-cache`
      `export HUGGINGFACE_HUB_CACHE=/workspace/work/hf-cache`
    - Run scripts directly using the built-in python environment. Do **not** run pip updates on Unsloth packages unless explicitly required, as it will break xformers/torchao dependencies.
+
+3. **Manual GGUF Export (Avoid Deadlocks):**
+   - The Unsloth `save_pretrained_gguf` function has a known bug where it deadlocks on large 27B+ models during the `llama.cpp` `subprocess.run` phase because `stdout` buffers overflow and it hangs silently on a pseudo-sudo prompt.
+   - **Do NOT use `quantization_method="q4_k_m"` directly in the Unsloth python script.** 
+   - Instead, export the merged 16-bit model by setting `quantization_method=None` (or `f16`).
+   - Then, manually compile and run `llama.cpp` to quantize the model safely:
+     ```bash
+     git clone https://github.com/ggerganov/llama.cpp.git
+     cd llama.cpp
+     make -j
+     pip install -r requirements.txt
+     python3 convert_hf_to_gguf.py /workspace/work/smm2-ai-trainer/smm2-gemma-27b --outfile ../smm2-gemma-27b-f16.gguf
+     ./llama-quantize ../smm2-gemma-27b-f16.gguf ../smm2-gemma-27b-Q4_K_M.gguf Q4_K_M
+     ```
