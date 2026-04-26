@@ -33,3 +33,20 @@ If achieving an `OK` byte match requires you to spam `*(volatile uint32_t*)` cas
 - **Understand the Compiler:** We use a patched Clang 8.0.0 (`-mllvm -enable-post-misched=false -mllvm -disable-store-merging -fno-slp-vectorize`). It is heavily optimized, but it inlines aggressively. If a function is massive, look for inline helper functions in the SMM1 decompilation references (`ref/smr/`).
 - **Structs over Primitives:** Nintendo extensively uses bitfields and structs. If an instruction uses `ldr w8, [x19, #0x492]`, you are likely dealing with a struct field, not raw pointer math. Search the `src/` headers for matching offsets.
 - **Ask for Help:** If you encounter a fundamental failure in the build system or you get totally stuck, do not spin in an endless loop apologizing. Pause the loop immediately and ask the human operator for help.
+
+## Cloud GPU Training (RunPod Workflow)
+When training the massive 27B model on RunPod, follow this exact workflow to bypass pip dependency hell and SSH restrictions.
+
+1. **Deploy:** Use the official Unsloth template (`pzr9tt3vvq` or "unsloth/unsloth:latest"). Select an A100 or A40 GPU. **Set Volume Disk to 200GB+**.
+2. **Transfer Data (The Fast Way):**
+   - On local WSL: `tar -czvf lora_model_27b_upload.tar.gz ./lora_model_27b`
+   - On local WSL: `runpodctl send lora_model_27b_upload.tar.gz`
+   - Open Jupyter Terminal on RunPod (Password: `unsloth`)
+   - On RunPod: `wget -qO- https://cli.runpod.net | sudo bash`
+   - On RunPod: `cd /workspace/work/ && runpodctl receive [CODE]`
+3. **Training & Export:**
+   - Always run operations inside `/workspace/work/` so data persists.
+   - Force HuggingFace cache to the large disk:
+     `export HF_HOME=/workspace/work/hf-cache`
+     `export HUGGINGFACE_HUB_CACHE=/workspace/work/hf-cache`
+   - Run scripts directly using the built-in python environment. Do **not** run pip updates on Unsloth packages unless explicitly required, as it will break xformers/torchao dependencies.

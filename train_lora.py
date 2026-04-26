@@ -4,6 +4,7 @@ from datasets import load_dataset
 from trl import SFTTrainer
 from transformers import TrainingArguments
 import os
+os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'
 
 # 1. Configuration
 max_seq_length = 1024
@@ -11,7 +12,7 @@ dtype = None # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for
 load_in_4bit = True # Use 4bit quantization to reduce memory usage.
 
 # Using the 9B parameter model which fits perfectly on a 16GB RTX 4080 in 4-bit
-model_name = "unsloth/gemma-2-9b-it-bnb-4bit"
+model_name = "unsloth/gemma-2-27b-it-bnb-4bit"
 
 # 2. Load Model & Tokenizer
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -32,7 +33,8 @@ model = FastLanguageModel.get_peft_model(
     lora_alpha = 16,
     lora_dropout = 0,
     bias = "none",
-    use_gradient_checkpointing = "unsloth", # Use Unsloth's highly optimized VRAM saving
+    use_gradient_checkpointing = True,
+    
     random_state = 3407,
     use_rslora = False,
     loftq_config = None,
@@ -53,8 +55,8 @@ def formatting_prompts_func(examples):
     texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False) for convo in convos]
     return { "text" : texts, }
 
-dataset = load_dataset("json", data_files="dataset_v1.jsonl", split="train")
-dataset = dataset.map(formatting_prompts_func, batched = True,)
+dataset = load_dataset("json", data_files="dataset_v3_chatml_chunk_1.jsonl", split="train")
+dataset = dataset.map(formatting_prompts_func, batched = True, num_proc = 1)
 
 # 5. Training
 trainer = SFTTrainer(
@@ -63,11 +65,11 @@ trainer = SFTTrainer(
     train_dataset = dataset,
     dataset_text_field = "text",
     max_seq_length = max_seq_length,
-    dataset_num_proc = 2,
+    dataset_num_proc = 1,
     packing = False, # Can make training 5x faster for short sequences.
     args = TrainingArguments(
-        per_device_train_batch_size = 1,
-        gradient_accumulation_steps = 4,
+        per_device_train_batch_size = 2,
+        gradient_accumulation_steps = 2,
         warmup_steps = 5,
         max_steps = 60, # Increase this for actual full training (e.g. num_train_epochs = 3)
         learning_rate = 2e-4,
