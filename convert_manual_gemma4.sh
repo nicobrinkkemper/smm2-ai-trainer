@@ -22,6 +22,8 @@ cmake -B build -G Ninja
 cmake --build build -j $(nproc)
 
 if [ ! -f "$F16_GGUF" ]; then
+python3 fix_config.py
+
     echo "Converting F16 model..."
     # We bypass the SentencePiece .model check entirely since it's obsolete in Gemma 4
     sed -i 's/self._set_vocab_sentencepiece()/self._set_vocab_gpt2()/g' convert_hf_to_gguf.py
