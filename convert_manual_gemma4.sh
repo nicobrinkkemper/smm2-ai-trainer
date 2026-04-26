@@ -23,8 +23,9 @@ cmake --build build -j $(nproc)
 
 if [ ! -f "$F16_GGUF" ]; then
     echo "Fixing tokenizer path requirement..."
-    # Download using python's built-in urllib because wget doesn't exist on this docker image!
-    python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/google/gemma-2-9b/resolve/main/tokenizer.model', '$MODEL_DIR/tokenizer.model')"
+    # We copy the tokenizer.model from the 27B directory we already downloaded
+    # earlier today to bypass the HuggingFace 401 Unauthorized block!
+    cp /workspace/work/smm2-ai-trainer/smm2-gemma-27b/tokenizer.model "$MODEL_DIR/tokenizer.model" || true
 
     echo "Patching llama.cpp to bypass the BPE hash check..."
     sed -i 's/self._set_vocab_gpt2()/self._set_vocab_sentencepiece()/g' convert_hf_to_gguf.py
