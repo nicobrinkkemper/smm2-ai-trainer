@@ -8,7 +8,8 @@ import os
 # Disable buggy high-speed downloader
 os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '0'
 
-max_seq_length = 2048
+# VRAM OPTIMIZATION: Reduced sequence length from 2048 to 1024 for MoE memory limits
+max_seq_length = 1024
 
 print("Loading Qwen 3 Coder 30B MoE base model...")
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -31,7 +32,7 @@ model = FastLanguageModel.get_peft_model(
 )
 
 print("Loading dataset...")
-dataset = load_dataset( path="Geitje1/smm2-decomp-chatml", split="train")
+dataset = load_dataset("json", data_files="dataset_v3_chatml.jsonl", split="train")
 
 def formatting_prompts_func(examples):
     conversations = examples["messages"]
@@ -50,8 +51,9 @@ trainer = SFTTrainer(
     dataset_num_proc = None,
     packing = False,
     args = TrainingArguments(
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
+        # VRAM OPTIMIZATION: Batch size 1, Gradient accumulation 8
+        per_device_train_batch_size = 1,
+        gradient_accumulation_steps = 8,
         warmup_steps = 5,
         max_steps = 60,
         learning_rate = 2e-4,
