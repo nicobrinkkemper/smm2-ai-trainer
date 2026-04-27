@@ -31,14 +31,14 @@ model = FastLanguageModel.get_peft_model(
 )
 
 print("Loading dataset...")
-dataset = load_dataset("json", data_files="dataset_v3_chatml.jsonl", split="train")
+dataset = load_dataset( path="Geitje1/smm2-decomp-chatml", split="train")
 
 def formatting_prompts_func(examples):
     conversations = examples["messages"]
     texts = [tokenizer.apply_chat_template(conv, tokenize=False, add_generation_prompt=False) for conv in conversations]
     return { "text" : texts }
 
-dataset = dataset.map(formatting_prompts_func, batched = True, num_proc=None) # num_proc=None prevents OOM on 85k dataset
+dataset = dataset.map(formatting_prompts_func, batched = True, num_proc=None)
 
 print(f"Starting Qwen 3 Coder LoRA fine-tuning on {len(dataset)} examples...")
 trainer = SFTTrainer(
