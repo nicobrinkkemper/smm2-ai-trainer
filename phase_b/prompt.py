@@ -128,3 +128,60 @@ def build_chatml(ctx: ContextBundle) -> list[dict]:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _build_user_body(ctx)},
     ]
+
+
+_ITERATION_PREAMBLE = (
+    "Your previous attempt did not match. Below is the structured diff of "
+    "what differs between the expected bytes and your candidate's output. "
+    "Apply targeted edits — keep what already matches, change only what the "
+    "diff reports. Re-emit the FULL function body, not just a patch."
+)
+
+
+def build_iteration_prompt(
+    ctx: ContextBundle,
+    *,
+    prior_candidate: str,
+    diff_summary: dict,
+    diff_edits: list[dict],
+    diff_verdict: str,
+) -> dict:
+    """Build a follow-up prompt with feedback from the previous attempt.
+
+    ``diff_summary`` is ``{class_name: count}`` and ``diff_edits`` is the
+    list of per-edit dicts as emitted by the evaluator (\
+    ``EvaluationResult.edits_json``).
+    """
+    base = _build_user_body(ctx)
+    edits_text = _render_diff_edits(diff_edits)
+    feedback = (
+        f"\n\n## Iteration feedback\n\n"
+        f"_(prior verdict: **{diff_verdict}**)_\n\n"
+        f"{_ITERATION_PREAMBLE}\n\n"
+        f"### Your previous candidate\n```cpp\n{prior_candidate}\n```\n\n"
+        f"### Diff summary\n"
+        + ", ".join(f"`{k}={v}`" for k, v in diff_summary.items())
+        + f"\n\n### Diff details\n{edits_text}"
+    )
+    return {"system": SYSTEM_PROMPT, "prompt": base + feedback}
+
+
+def _render_diff_edits(edits: list[dict]) -> str:
+    """Compact, model-readable rendering of the structured diff."""
+    if not edits:
+        return "_(no edits — but verdict was not MATCH; investigate prompt or build)_"
+    out: list[str] = []
+    for ed in edits[:12]:  # cap so the prompt doesn't explode
+        out.append(
+            f"- **[{ed.get('kind','?')}] {ed.get('classification','?')}** "
+            f"(severity={ed.get('severity','?')}): {ed.get('note','')}"
+        )
+        if ed.get("fix_recipe"):
+            out.append(f"    - fix: {ed['fix_recipe']}")
+        for line in ed.get("expected", [])[:6]:
+            out.append(f"    - expected: `{line}`")
+        for line in ed.get("actual", [])[:6]:
+            out.append(f"    + actual:   `{line}`")
+    if len(edits) > 12:
+        out.append(f"_(…and {len(edits) - 12} more edits)_")
+    return "\n".join(out)
