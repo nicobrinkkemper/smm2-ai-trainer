@@ -18,6 +18,13 @@ from .context import FetchError, fetch_context
 from .prompt import build_prompt
 from .ollama import OllamaClient, OllamaError
 from .runner import DecompResult, decompile_one
+# Note: we do NOT re-export the `evaluate` function from `.evaluate` here
+# because doing so shadows the submodule (Python sees `phase_b.evaluate` as
+# the rebound function, not the module). Callers should
+#    from phase_b.evaluate import evaluate
+# explicitly. Same logic for any other name that collides with its module.
+from .evaluate import EvaluationResult, EvaluationError
+from .results import open_db, log_attempt, get_attempts, model_scoreboard
 
 __all__ = [
     "FetchError",
@@ -27,4 +34,10 @@ __all__ = [
     "OllamaError",
     "DecompResult",
     "decompile_one",
+    "EvaluationResult",
+    "EvaluationError",
+    "open_db",
+    "log_attempt",
+    "get_attempts",
+    "model_scoreboard",
 ]
