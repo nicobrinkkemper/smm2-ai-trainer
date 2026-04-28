@@ -123,7 +123,8 @@ class BenchmarkConfig:
     models: Sequence[str]
     candidates: Sequence[dict]
     decomp_repo: Path
-    db_path: Optional[Path] = None
+    db_path: Optional[Path] = None       # results.sqlite — Phase B ledger
+    fkb_db_path: Optional[Path] = None   # smm2-decomp's FKB sqlite
     out_csv: Optional[Path] = None
     skip_already: bool = False
     skip_build: bool = False
@@ -150,7 +151,7 @@ def run_benchmark(cfg: BenchmarkConfig) -> list[dict]:
     n = 0
     for cand in cfg.candidates:
         addr = cand["addr"]
-        ctx = fetch_context(addr, decomp_repo=cfg.decomp_repo, db_path=cfg.db_path)
+        ctx = fetch_context(addr, decomp_repo=cfg.decomp_repo, db_path=cfg.fkb_db_path)
         for model in cfg.models:
             n += 1
             pair = (ctx.function_id, model)
@@ -233,7 +234,17 @@ def cli_main(argv: list[str] | None = None) -> int:
         "--model", action="append", default=None,
         help="model to benchmark (repeatable). Default: gemma2:27b qwen2.5-coder:7b",
     )
-    p.add_argument("--db", default=None, help="results.sqlite path")
+    p.add_argument("--db", default=None, help="results.sqlite path (Phase B ledger)")
+    p.add_argument(
+        "--fkb-db", default=None,
+        help=(
+            "path to the FKB SQLite (smm2-decomp's data/v3.0.3/fkb.sqlite). "
+            "Defaults to the FKB CLI's own default; PRE-REQUISITE: run "
+            "`python3 -m tools.fkb.cli sync && python3 -m tools.fkb.cli xref` "
+            "in smm2-decomp once before benchmarking, otherwise `ready` "
+            "returns no candidates."
+        ),
+    )
     p.add_argument("--out-csv", default=None, help="write per-attempt rows to CSV")
     p.add_argument("--limit", type=int, default=20, help="number of candidate functions")
     p.add_argument("--max-size", type=int, default=400)
@@ -258,6 +269,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     candidates = pick_ready(
         decomp_repo=repo,
+        db_path=Path(args.fkb_db) if args.fkb_db else None,
         qualities=qualities,
         min_size=args.min_size,
         max_size=args.max_size,
@@ -273,6 +285,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         candidates=candidates,
         decomp_repo=repo,
         db_path=Path(args.db) if args.db else None,
+        fkb_db_path=Path(args.fkb_db) if args.fkb_db else None,
         out_csv=Path(args.out_csv) if args.out_csv else None,
         skip_already=args.skip_already,
         skip_build=args.skip_build,
