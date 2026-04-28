@@ -23,6 +23,8 @@ from pathlib import Path
 from .context import fetch_context
 from .prompt import build_prompt
 from .runner import decompile_one
+from .evaluate import evaluate
+from .results import open_db, log_attempt, model_scoreboard
 
 
 def _cmd_decompile(args: argparse.Namespace) -> int:
@@ -49,6 +51,80 @@ def _cmd_decompile(args: argparse.Namespace) -> int:
         print(f"  ERROR:    {res.error}", file=sys.stderr)
         return 2
     return 0 if res.candidate_cpp else 1
+
+
+def _cmd_attempt(args: argparse.Namespace) -> int:
+    """One-shot full pipeline: context → infer → evaluate → log."""
+    decomp_repo = Path(args.decomp_repo) if args.decomp_repo else None
+    res = decompile_one(
+        args.target,
+        model=args.model,
+        decomp_repo=decomp_repo,
+        out_dir=Path(args.out) if args.out else None,
+        temperature=args.temperature,
+        num_predict=args.num_predict,
+    )
+    print(f"function: {res.function_name}  ({res.function_id})")
+    print(f"  model:    {res.model}")
+    if res.error:
+        print(f"  ERROR:    {res.error}", file=sys.stderr)
+        if not args.no_log:
+            with open_db(args.db) as conn:
+                log_attempt(conn, decomp_result=res)
+        return 2
+    if not res.candidate_cpp:
+        print("  WARN:     model returned no usable candidate", file=sys.stderr)
+        if not args.no_log:
+            with open_db(args.db) as conn:
+                log_attempt(conn, decomp_result=res)
+        return 1
+
+    # Evaluate (compile + diff).
+    ctx = fetch_context(args.target, decomp_repo=decomp_repo)
+    eval_res = evaluate(
+        function_id=ctx.function_id,
+        function_name=ctx.function_name,
+        expected_addr=ctx.function_addr,
+        expected_size=ctx.function_size,
+        candidate_cpp=res.candidate_cpp,
+        decomp_repo=decomp_repo,
+        skip_build=args.skip_build,
+    )
+    print(f"  verdict:  {eval_res.verdict}    severity: {eval_res.severity}")
+    if eval_res.summary:
+        cls = ", ".join(f"{k}={v}" for k, v in eval_res.summary.items())
+        print(f"  edits:    {cls}")
+    if eval_res.build_error:
+        print(f"  build:    {eval_res.build_error[:200]}")
+
+    if not args.no_log:
+        with open_db(args.db) as conn:
+            log_attempt(conn, decomp_result=res, eval_result=eval_res)
+
+    return {
+        "MATCH": 0, "ACCEPT_W": 0, "FIX": 1, "ESCALATE": 2,
+        "BUILD_FAIL": 3, "RESOLVE_FAIL": 3,
+    }.get(eval_res.verdict, 1)
+
+
+def _cmd_scoreboard(args: argparse.Namespace) -> int:
+    with open_db(args.db) as conn:
+        rows = model_scoreboard(conn)
+    if not rows:
+        print("(no attempts logged yet)")
+        return 0
+    print(f"{'model':<24} {'#':>4} {'M':>4} {'W':>4} {'F':>4} {'E':>4} "
+          f"{'BF':>4} {'tok':>8} {'sec':>6}")
+    print("-" * 80)
+    for r in rows:
+        print(
+            f"{r['model'][:24]:<24} "
+            f"{r['attempts']:>4} {r['matches']:>4} {r['accept_w']:>4} "
+            f"{r['fix']:>4} {r['escalate']:>4} {r['build_fail']:>4} "
+            f"{(r['mean_tokens'] or 0):>8.0f} "
+            f"{(r['mean_seconds'] or 0):>6.1f}"
+        )
+    return 0
 
 
 def _cmd_prompt(args: argparse.Namespace) -> int:
@@ -86,6 +162,32 @@ def build_parser() -> argparse.ArgumentParser:
     sp_p.add_argument("target")
     sp_p.add_argument("--json", action="store_true")
     sp_p.set_defaults(func=_cmd_prompt)
+
+    sp_a = sub.add_parser(
+        "attempt",
+        help="full one-shot loop: context → infer → evaluate → log",
+    )
+    sp_a.add_argument("target")
+    sp_a.add_argument("--model", default="gemma2:27b")
+    sp_a.add_argument("--out", default=None)
+    sp_a.add_argument("--temperature", type=float, default=0.1)
+    sp_a.add_argument("--num-predict", type=int, default=4096)
+    sp_a.add_argument("--db", default=None, help="results.sqlite path")
+    sp_a.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="don't run ninja; assume build/Slope is already current",
+    )
+    sp_a.add_argument(
+        "--no-log",
+        action="store_true",
+        help="don't write to results.sqlite",
+    )
+    sp_a.set_defaults(func=_cmd_attempt)
+
+    sp_s = sub.add_parser("scoreboard", help="per-model verdict distribution")
+    sp_s.add_argument("--db", default=None)
+    sp_s.set_defaults(func=_cmd_scoreboard)
 
     return p
 
