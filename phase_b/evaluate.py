@@ -49,6 +49,34 @@ def _import_diff_classify():
     return disassemble, build_diff
 
 
+def _build_diff_context(repo: Path, slope_elf: Path):
+    """Build a DiffContext with FKB + nm resolvers so build_diff can
+    distinguish "wrong target symbol" from "same target, different layout".
+    Returns ``None`` on any failure — the caller falls back to bytes-only
+    classification (the pre-resolver behaviour)."""
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+    try:
+        from tools.diff_classify import (  # noqa: E402
+            DiffContext, fkb_resolver, nm_resolver,
+        )
+        import sqlite3
+    except Exception:
+        return None
+    fkb_path = repo / "data" / "v3.0.3" / "fkb.sqlite"
+    if not fkb_path.exists() or not slope_elf.exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(fkb_path))
+        conn.row_factory = sqlite3.Row
+        return DiffContext(
+            expected_resolver=fkb_resolver(conn),
+            actual_resolver=nm_resolver(slope_elf),
+        )
+    except Exception:
+        return None
+
+
 BASE_ADDR = 0x7100000000
 TEXT_OFFSET_MAIN_ELF = 0x888
 
@@ -295,8 +323,12 @@ def evaluate(
         res.actual_size = len(actual)
         disassemble, build_diff = _import_diff_classify()
         e_ins = disassemble(expected, base_addr=expected_addr)
-        a_ins = disassemble(actual, base_addr=0)
-        diff = build_diff(e_ins, a_ins, name=function_name)
+        # Use the build/Slope absolute address so the actual_resolver
+        # (nm-based) can find the right symbols at the right addresses.
+        sym_addr = find_symbol_addr(slope_elf, function_name) or 0
+        a_ins = disassemble(actual, base_addr=sym_addr)
+        diff_ctx = _build_diff_context(repo, slope_elf)
+        diff = build_diff(e_ins, a_ins, name=function_name, ctx=diff_ctx)
 
         res.verdict = diff.verdict()
         res.severity = diff.severity.name

@@ -95,6 +95,24 @@ def test_pick_ready_invokes_cli(monkeypatch, tmp_path):
     assert "--max-size" in captured["cmd"]
 
 
+def test_pick_ready_threads_db_path_to_fkb_cli(monkeypatch, tmp_path):
+    """Found in real-world: pick_ready was discarding db_path, so users
+    who pointed at a populated FKB elsewhere got '(no candidates)'."""
+    captured = {}
+    def stub_run(cmd, *a, **kw):
+        captured["cmd"] = list(cmd)
+        return subprocess.CompletedProcess(cmd, 0, SAMPLE_TABLE, "")
+    monkeypatch.setattr(subprocess, "run", stub_run)
+    fkb = tmp_path / "elsewhere.sqlite"
+    fkb.touch()
+    pick_ready(decomp_repo=tmp_path, db_path=fkb, qualities=("W",))
+    # The --db arg must be in the CLI invocation, BEFORE the `ready` subcmd.
+    assert "--db" in captured["cmd"]
+    db_idx = captured["cmd"].index("--db")
+    assert captured["cmd"][db_idx + 1] == str(fkb)
+    assert captured["cmd"].index("--db") < captured["cmd"].index("ready")
+
+
 def test_pick_ready_raises_on_cli_failure(monkeypatch, tmp_path):
     def stub_run(cmd, *a, **kw):
         return subprocess.CompletedProcess(cmd, 1, "", "boom")

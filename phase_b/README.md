@@ -64,6 +64,23 @@ Concrete claim: a 10% one-shot rate at five iterations should approach
 model can't escape stuck states. The benchmark harness measures the real
 shape of this curve.
 
+## Prerequisites
+
+The benchmark and prompt subcommands shell to smm2-decomp's FKB CLI, which
+needs a populated FKB sqlite. **Run this once in your smm2-decomp checkout
+before the first benchmark / iterate run:**
+
+```bash
+cd ~/code/smm2-decomp
+python3 -m tools.fkb.cli sync     # 104k rows from functions.csv
+python3 -m tools.fkb.cli xref     # ~370k call edges from main.elf
+```
+
+If the FKB is empty (`ready` returns "(no candidates)"), the benchmark
+will exit with that message. Pass `--fkb-db /custom/path/fkb.sqlite` to
+phase_b benchmark if you keep the FKB elsewhere; otherwise the FKB CLI's
+default (`smm2-decomp/data/v3.0.3/fkb.sqlite`) is used.
+
 ## CLI quickstart
 
 ```bash
