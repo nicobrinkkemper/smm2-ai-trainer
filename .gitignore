@@ -1,0 +1,45 @@
+# Python build artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtualenvs
+venv/
+.venv/
+env/
+
+# Phase B local state
+phase_b/results.sqlite
+phase_b/results.sqlite-shm
+phase_b/results.sqlite-wal
+
+# Large training artefacts that don't belong in git
+dataset_v3_chatml.jsonl
+dataset_v3_chatml.jsonl.gz
+dataset_v3_chatml_chunk_*.jsonl
+dataset_v3_full.jsonl
+*.gguf
+*.tar.gz
+lora_model/
+lora_model_*/
+lora_model_download/
+merged_16bit*/
+smm2-gemma/
+smm2-gemma_gguf/
+smm2-gemma-*/
+outputs/
+unsloth_compiled_cache/
+_unsloth_sentencepiece_temp/
+
+# Logs
+*.log
+
+# AWS / RunPod tooling
+aws/
+awscliv2.zip
+runpodctl
+
+# Local scratch / one-off scripts
+prompt_test.txt

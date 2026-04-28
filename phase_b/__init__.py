@@ -1,0 +1,30 @@
+"""Phase B integration: turn smm2-decomp's Phase A context bundle + diff
+classifier into a closed-loop autonomous decompilation pipeline driven by
+local LLMs (Gemma, Qwen Coder, …).
+
+The package is intentionally small. Each module has a single job:
+
+- ``context``  — pull a function context bundle from smm2-decomp's FKB CLI
+- ``prompt``   — format the bundle into a ChatML/instruct prompt
+- ``ollama``   — talk to a local Ollama server (or any compatible API)
+- ``runner``   — top-level "decompile this function" entry point
+- ``cli``      — argparse front-end
+
+Other tasks (evaluator, benchmark, iteration controller) are built on top of
+these primitives.
+"""
+
+from .context import FetchError, fetch_context
+from .prompt import build_prompt
+from .ollama import OllamaClient, OllamaError
+from .runner import DecompResult, decompile_one
+
+__all__ = [
+    "FetchError",
+    "fetch_context",
+    "build_prompt",
+    "OllamaClient",
+    "OllamaError",
+    "DecompResult",
+    "decompile_one",
+]
