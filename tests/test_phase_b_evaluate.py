@@ -68,6 +68,69 @@ def test_place_candidate_creates_auto_file_for_unknown(tmp_path):
     assert not placement.path.exists()
 
 
+def test_find_existing_source_skips_auto_directory(tmp_path):
+    """Auto-generated reference-only files must NOT be selected as the
+    placement target. Real definition site wins."""
+    from phase_b.evaluate import _find_existing_source
+    repo = _make_repo(tmp_path)
+    real = repo / "src" / "Lp" / "Utl" / "StateMachine.cpp"
+    real.write_text(
+        "#include <foo>\n"
+        "void StateMachine::reset() {\n"
+        "    // body\n"
+        "}\n"
+    )
+    # Auto-generated reference: only mentions the mangled name in asm.
+    auto = repo / "src" / "auto" / "auto_8b_reloc.cpp"
+    auto.write_text(
+        '// Auto-generated reference — DO NOT EDIT\n'
+        '// asm("bl _ZN2Lp3Utl12StateMachine5resetEv\\n")\n'
+    )
+    found = _find_existing_source(repo, "_ZN2Lp3Utl12StateMachine5resetEv")
+    assert found == real
+
+
+def test_find_existing_source_falls_back_to_mangled_when_no_demangled(tmp_path):
+    """If no file has a demangled definition but a hand-written file uses
+    the mangled name (extern \"C\" naked impl, etc.), still pick that —
+    just not src/auto/ files."""
+    from phase_b.evaluate import _find_existing_source
+    repo = _make_repo(tmp_path)
+    real = repo / "src" / "game" / "ManglerStub.cpp"
+    real.parent.mkdir(parents=True, exist_ok=True)
+    real.write_text(
+        'extern "C" __attribute__((naked)) void '
+        '_ZN2Lp3Utl12StateMachine5resetEv() { asm volatile("ret"); }\n'
+    )
+    auto = repo / "src" / "auto" / "auto_x.cpp"
+    auto.write_text("// uses _ZN2Lp3Utl12StateMachine5resetEv only as asm ref\n")
+    found = _find_existing_source(repo, "_ZN2Lp3Utl12StateMachine5resetEv")
+    assert found == real
+
+
+def test_find_existing_source_returns_none_when_only_auto_matches(tmp_path):
+    """If ALL matches are in src/auto/, return None — caller will then drop
+    a fresh src/auto/_phase_b_<…>.cpp file with a clear name."""
+    from phase_b.evaluate import _find_existing_source
+    repo = _make_repo(tmp_path)
+    auto = repo / "src" / "auto" / "auto_8b_reloc.cpp"
+    auto.write_text("// asm reference: _ZN2Lp3Utl12StateMachine5resetEv\n")
+    found = _find_existing_source(repo, "_ZN2Lp3Utl12StateMachine5resetEv")
+    assert found is None
+
+
+def test_demangled_patterns_known_mangling():
+    from phase_b.evaluate import _demangled_definition_patterns
+    pats = _demangled_definition_patterns("_ZN2Lp3Utl12StateMachine5resetEv")
+    assert any("StateMachine::reset(" in p for p in pats)
+    assert any("Lp::Utl::StateMachine::reset(" in p for p in pats)
+
+
+def test_demangled_patterns_non_zn_returns_empty():
+    from phase_b.evaluate import _demangled_definition_patterns
+    assert _demangled_definition_patterns("plain_c_name") == []
+
+
 def test_safe_filename_strips_dangerous_chars():
     from phase_b.evaluate import _safe_filename
     assert _safe_filename("foo/bar:baz") == "foo_bar_baz"
