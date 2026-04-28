@@ -24,6 +24,7 @@ from .context import fetch_context
 from .prompt import build_prompt
 from .runner import decompile_one
 from .evaluate import evaluate
+from .iterate import iterate_one
 from .results import open_db, log_attempt, model_scoreboard
 
 
@@ -189,7 +190,50 @@ def build_parser() -> argparse.ArgumentParser:
     sp_s.add_argument("--db", default=None)
     sp_s.set_defaults(func=_cmd_scoreboard)
 
+    sp_i = sub.add_parser(
+        "iterate",
+        help="iteration controller: budgeted permuter-style loop on one function",
+    )
+    sp_i.add_argument("target")
+    sp_i.add_argument("--model", default="gemma2:27b")
+    sp_i.add_argument("--db", default=None, help="results.sqlite path")
+    sp_i.add_argument("--max-attempts", type=int, default=5)
+    sp_i.add_argument("--max-seconds", type=float, default=600.0)
+    sp_i.add_argument("--temperature", type=float, default=0.3)
+    sp_i.add_argument("--num-predict", type=int, default=4096)
+    sp_i.add_argument("--skip-build", action="store_true")
+    sp_i.add_argument("--no-log", action="store_true")
+    sp_i.set_defaults(func=_cmd_iterate)
+
     return p
+
+
+def _cmd_iterate(args: argparse.Namespace) -> int:
+    outcome = iterate_one(
+        args.target,
+        model=args.model,
+        max_attempts=args.max_attempts,
+        max_seconds=args.max_seconds,
+        decomp_repo=Path(args.decomp_repo) if args.decomp_repo else None,
+        db_path=Path(args.db) if args.db else None,
+        skip_build=args.skip_build,
+        temperature=args.temperature,
+        num_predict=args.num_predict,
+        log=not args.no_log,
+    )
+    print(f"function: {outcome.function_name}")
+    print(f"  attempts:      {outcome.step_count()}")
+    print(f"  final verdict: {outcome.final_verdict or '-'}")
+    print(f"  success:       {outcome.success}")
+    print(f"  stop reason:   {outcome.stop_reason}")
+    for st in outcome.steps:
+        v = st.eval.verdict if st.eval else "ERR"
+        print(
+            f"  [{st.attempt_num}] {v:<12} "
+            f"prompt={st.decomp.prompt_chars:>5}c "
+            f"resp={st.decomp.response_chars:>5}c {st.duration_s:5.1f}s"
+        )
+    return 0 if outcome.success else 1
 
 
 def main(argv: list[str] | None = None) -> int:
