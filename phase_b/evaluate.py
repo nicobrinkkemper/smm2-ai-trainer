@@ -111,24 +111,119 @@ class EvaluationResult:
 # --------------------------------------------------------------------------- #
 
 def _find_existing_source(repo: Path, mangled_name: str) -> Optional[Path]:
-    """Grep src/ for a definition or W-stub of the function. We can't rely
-    on the build to tell us — viking checks the binary, not source maps."""
+    """Locate the .cpp file that DEFINES the function, not just files that
+    reference it.
+
+    Why this is non-trivial: ``src/auto/auto_*_*.cpp`` (auto-generated)
+    contain ``bl <mangled>`` in inline asm for thousands of functions,
+    so a naive grep on the mangled name returns those first and the
+    candidate gets dropped into the wrong file. Real definitions live in
+    hand-written sources and use the demangled C++ form (e.g. ``void
+    StateMachine::reset()``) plus a brace-opening function body.
+
+    Strategy: search hand-written sources only (skip ``src/auto/``); look
+    for a function-body opener after a demangled-style definition. Fall
+    back to the mangled-name match if no demangled definition is found
+    (handles unusual cases like ``extern "C"`` impls of mangled stubs).
+    """
     src = repo / "src"
     if not src.is_dir():
         return None
-    grep_for = [mangled_name, mangled_name.replace("_Z", "_Z")]
-    try:
-        proc = subprocess.run(
-            ["grep", "-rln", "--include=*.cpp", "-e", mangled_name, str(src)],
-            capture_output=True, text=True, timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        return None
-    for line in proc.stdout.splitlines():
-        p = Path(line.strip())
-        if p.is_file():
-            return p
-    return None
+    auto_dir = src / "auto"
+
+    demangled_patterns = _demangled_definition_patterns(mangled_name)
+
+    def _grep(patterns: list[str]) -> list[Path]:
+        if not patterns:
+            return []
+        cmd = ["grep", "-rln", "--include=*.cpp"]
+        for p in patterns:
+            cmd += ["-e", p]
+        cmd.append(str(src))
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            return []
+        out = []
+        for line in proc.stdout.splitlines():
+            path = Path(line.strip())
+            if not path.is_file():
+                continue
+            # Skip any file under src/auto/ — those only reference symbols
+            # in inline asm; they never define them.
+            try:
+                path.resolve().relative_to(auto_dir.resolve())
+                continue
+            except ValueError:
+                pass
+            out.append(path)
+        return out
+
+    # First try: definition-shaped grep over hand-written sources.
+    candidates = _grep(demangled_patterns)
+    if candidates:
+        return candidates[0]
+
+    # Fallback: any file that mentions the mangled name, still skipping
+    # src/auto/. This catches unusual layouts where the function is defined
+    # via extern "C" using the mangled name as the linker symbol directly.
+    fallback = _grep([mangled_name])
+    return fallback[0] if fallback else None
+
+
+def _demangled_definition_patterns(mangled_name: str) -> list[str]:
+    """Build grep patterns that match a likely C++ DEFINITION of the
+    function (function-body opener) rather than a mere reference.
+
+    Decodes the simple Itanium mangling
+        ``_ZN<n1>X<n2>Y<n3>Z<m>methodE<args>``
+    where each name segment is a length-prefixed identifier. We don't
+    need full demangling; we just need to recover the ``Class::method(``
+    skeleton as a substring grep pattern.
+    """
+    patterns: list[str] = []
+    if not mangled_name.startswith("_ZN"):
+        return patterns
+    rest = mangled_name[3:]
+    parts: list[str] = []
+    i = 0
+    while i < len(rest):
+        # Read a length prefix (non-negative integer).
+        j = i
+        while j < len(rest) and rest[j].isdigit():
+            j += 1
+        if j == i:
+            break
+        try:
+            n = int(rest[i:j])
+        except ValueError:
+            break
+        if j + n > len(rest):
+            break
+        parts.append(rest[j : j + n])
+        i = j + n
+        if i < len(rest) and rest[i] == "E":
+            break
+    if not parts:
+        return patterns
+    method = parts[-1]
+    klass = "::".join(parts[:-1]) if len(parts) > 1 else ""
+    if klass:
+        # Common shapes that an author would write for the definition.
+        # Both FQN form (Lp::Utl::StateMachine::reset) and bare-class form
+        # (StateMachine::reset) — the latter is what C++ writers use when
+        # the definition is inside the enclosing namespace.
+        patterns.append(f"{klass}::{method}(")
+        patterns.append(f"{klass}::{method} (")
+        innermost = parts[-2]
+        if innermost != klass:
+            patterns.append(f"{innermost}::{method}(")
+            patterns.append(f"{innermost}::{method} (")
+    else:
+        patterns.append(f" {method}(")
+    return patterns
 
 
 def _safe_filename(name: str) -> str:
